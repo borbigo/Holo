@@ -1,0 +1,161 @@
+// schema.prisma for Holo - Pokemon TCG Analytics Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  passwordHash  String
+  firstName     String?
+  lastName      String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  collections   Collection[]
+  watchlists    Watchlist[]
+}
+
+model Card {
+  id                String            @id
+  name              String
+  setName           String
+  setId             String
+  number            String
+  rarity            String?
+  types             String[]
+  supertype         String
+  subtypes          String[]
+  hp                String?
+  imageUrl          String?
+  imageUrlHiRes     String?
+  artist            String?
+  releaseDate       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  priceHistory      PriceHistory[]
+  collectionItems   CollectionItem[]
+  watchlistItems    WatchlistItem[]
+  set               Set?              @relation(fields: [setId], references: [id])
+
+  @@index([name])
+  @@index([setId])
+  @@index([rarity])
+}
+
+model Set {
+  id            String   @id
+  name          String
+  series        String
+  printedTotal  Int
+  total         Int
+  releaseDate   DateTime
+  imageUrl      String?
+  logoUrl       String?
+  symbolUrl     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  cards         Card[]
+
+  @@index([releaseDate])
+  @@index([series])
+}
+
+model PriceHistory {
+  id            String   @id @default(uuid())
+  cardId        String
+  date          DateTime @default(now())
+  marketPrice   Float?
+  lowPrice      Float?
+  midPrice      Float?
+  highPrice     Float?
+  directLowPrice Float?
+  source        String   @default("tcgplayer")
+  createdAt     DateTime @default(now())
+  card          Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId, date])
+  @@index([date])
+}
+
+model Collection {
+  id          String           @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  isPublic    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       CollectionItem[]
+
+  @@index([userId])
+}
+
+model CollectionItem {
+  id              String     @id @default(uuid())
+  collectionId    String
+  cardId          String
+  quantity        Int        @default(1)
+  condition       String     @default("near_mint")
+  purchasePrice   Float?
+  purchaseDate    DateTime?
+  gradingCompany  String?
+  gradingScore    String?
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  collection      Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  card            Card       @relation(fields: [cardId], references: [id])
+
+  @@index([collectionId])
+  @@index([cardId])
+}
+
+model Watchlist {
+  id        String          @id @default(uuid())
+  userId    String
+  name      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     WatchlistItem[]
+
+  @@index([userId])
+}
+
+model WatchlistItem {
+  id            String    @id @default(uuid())
+  watchlistId   String
+  cardId        String
+  targetPrice   Float?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  watchlist     Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  card          Card      @relation(fields: [cardId], references: [id])
+
+  @@index([watchlistId])
+  @@index([cardId])
+}
+
+model DailyMarketSummary {
+  id                String   @id @default(uuid())
+  date              DateTime @unique
+  totalCards        Int
+  averagePrice      Float
+  medianPrice       Float
+  totalMarketCap    Float
+  topGainer         String?
+  topGainerPercent  Float?
+  topLoser          String?
+  topLoserPercent   Float?
+  createdAt         DateTime @default(now())
+
+  @@index([date])
+}
