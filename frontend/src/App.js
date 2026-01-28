@@ -1,4 +1,5 @@
-// src/App.js
+// frontend/src/App.js
+
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
@@ -14,6 +15,8 @@ import HomePage from './pages/HomePage';
 import CardsPage from './pages/CardsPage';
 import CardDetailPage from './pages/CardDetailPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import OnePieceCardsPage from './pages/OnePieceCardsPage';  // NEW
+import OnePieceCardDetailPage from './pages/OnePieceCardDetailPage';  // NEW
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import CollectionsPage from './pages/CollectionsPage';
@@ -60,6 +63,8 @@ function App() {
               <Route path="/cards" element={<CardsPage />} />
               <Route path="/cards/:id" element={<CardDetailPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/onepiece/cards" element={<OnePieceCardsPage />} />  {/* NEW */}
+              <Route path="/onepiece/cards/:id" element={<OnePieceCardDetailPage />} />  {/* NEW */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/collections" element={<CollectionsPage />} />

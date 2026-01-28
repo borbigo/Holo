@@ -1,4 +1,4 @@
-// schema.prisma for Holo - Pokemon TCG Analytics Platform
+// backend/prisma/schema.prisma
 
 generator client {
   provider = "prisma-client-js"
@@ -8,6 +8,10 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ============================================
+// POKEMON TCG MODELS (Existing - unchanged)
+// ============================================
 
 model User {
   id            String       @id @default(uuid())
@@ -158,4 +162,83 @@ model DailyMarketSummary {
   createdAt         DateTime @default(now())
 
   @@index([date])
+}
+
+// ============================================
+// ONE PIECE TCG MODELS (New)
+// ============================================
+
+model OnePieceSet {
+  id            String         @id
+  name          String
+  releaseDate   DateTime?
+  totalCards    Int?
+  imageUrl      String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  cards         OnePieceCard[] @relation("OnePieceSetCards")
+
+  @@index([releaseDate])
+  @@map("one_piece_sets")
+}
+
+model OnePieceStarterDeck {
+  id            String         @id
+  name          String
+  releaseDate   DateTime?
+  totalCards    Int?
+  imageUrl      String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  cards         OnePieceCard[] @relation("OnePieceStarterDeckCards")
+
+  @@index([releaseDate])
+  @@map("one_piece_starter_decks")
+}
+
+model OnePieceCard {
+  id              String                  @id
+  name            String
+  cardType        String
+  setId           String?
+  color           String?
+  category        String?
+  cost            Int?
+  attribute       String?
+  power           Int?
+  counter         Int?
+  rarity          String?
+  effect          String?                 @db.Text
+  trigger         String?
+  imageUrl        String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  priceHistory    OnePiecePriceHistory[]
+  set             OnePieceSet?            @relation("OnePieceSetCards", fields: [setId], references: [id], map: "one_piece_card_set_fkey")
+  starterDeck     OnePieceStarterDeck?    @relation("OnePieceStarterDeckCards", fields: [setId], references: [id], map: "one_piece_card_starter_deck_fkey")
+
+  @@index([name])
+  @@index([setId])
+  @@index([color])
+  @@index([category])
+  @@index([rarity])
+  @@index([cardType])
+  @@map("one_piece_cards")
+}
+
+model OnePiecePriceHistory {
+  id            String        @id @default(uuid())
+  cardId        String
+  date          DateTime      @default(now())
+  marketPrice   Float?
+  lowPrice      Float?
+  midPrice      Float?
+  highPrice     Float?
+  source        String        @default("tcgplayer")
+  createdAt     DateTime      @default(now())
+  card          OnePieceCard  @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId, date])
+  @@index([date])
+  @@map("one_piece_price_history")
 }

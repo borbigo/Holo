@@ -1,4 +1,5 @@
-// src/components/common/Navbar.js
+// frontend/src/components/common/Navbar.js
+
 import React, { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
@@ -18,7 +19,6 @@ import {
   Home as HomeIcon,
   Style as CardIcon,
   Analytics as AnalyticsIcon,
-  AccountCircle as AccountCircleIcon,
   Collections as CollectionsIcon,
 } from '@mui/icons-material';
 import HoloLogo from './HoloLogo';
@@ -31,6 +31,7 @@ const Navbar = () => {
   const isAuthenticated = auth?.isAuthenticated || false;
   const user = auth?.user || null;
   const [anchorEl, setAnchorEl] = useState(null);
+  const [cardsMenuAnchor, setCardsMenuAnchor] = useState(null);
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -38,6 +39,14 @@ const Navbar = () => {
 
   const handleClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleCardsMenuOpen = (event) => {
+    setCardsMenuAnchor(event.currentTarget);
+  };
+
+  const handleCardsMenuClose = () => {
+    setCardsMenuAnchor(null);
   };
 
   const handleLogout = () => {
@@ -103,9 +112,10 @@ const Navbar = () => {
             >
               Home
             </Button>
+            
+            {/* Cards Dropdown */}
             <Button
-              component={RouterLink}
-              to="/cards"
+              onClick={handleCardsMenuOpen}
               sx={{ 
                 color: 'white',
                 '&:hover': {
@@ -117,6 +127,37 @@ const Navbar = () => {
             >
               Cards
             </Button>
+            <Menu
+              anchorEl={cardsMenuAnchor}
+              open={Boolean(cardsMenuAnchor)}
+              onClose={handleCardsMenuClose}
+              anchorOrigin={{
+                vertical: 'bottom',
+                horizontal: 'left',
+              }}
+              transformOrigin={{
+                vertical: 'top',
+                horizontal: 'left',
+              }}
+            >
+              <MenuItem 
+                onClick={() => {
+                  handleCardsMenuClose();
+                  navigate('/cards');
+                }}
+              >
+                Pokemon TCG
+              </MenuItem>
+              <MenuItem 
+                onClick={() => {
+                  handleCardsMenuClose();
+                  navigate('/onepiece/cards');
+                }}
+              >
+                One Piece TCG
+              </MenuItem>
+            </Menu>
+
             <Button
               component={RouterLink}
               to="/analytics"

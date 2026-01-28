@@ -1,10 +1,12 @@
-// src/store/store.js
+// frontend/src/store/store.js
+
 import { configureStore } from '@reduxjs/toolkit';
 import cardsReducer from './slices/cardsSlice';
 import setsReducer from './slices/setsSlice';
 import analyticsReducer from './slices/analyticsSlice';
 import authReducer from './slices/authSlice';
 import collectionReducer from './slices/collectionSlice';
+import onePieceReducer from './slices/onePieceSlice';  // NEW
 
 export const store = configureStore({
   reducer: {
@@ -13,6 +15,7 @@ export const store = configureStore({
     analytics: analyticsReducer,
     auth: authReducer,
     collections: collectionReducer,
+    onePiece: onePieceReducer,  // NEW
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -1,4 +1,5 @@
-// src/server.js - Holo Backend Server
+// backend/src/server.js - Holo backend server
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -29,17 +30,18 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API Routes (we'll add these next)
+// API Routes
 app.get('/api', (req, res) => {
   res.json({ 
-    message: 'Welcome to Holo - Pokemon TCG Analytics API',
+    message: 'Welcome to Holo - TCG Analytics API',
     version: '1.0.0',
     endpoints: {
       health: '/health',
       cards: '/api/cards',
-      sets: '/api/sets',
       analytics: '/api/analytics',
-      collections: '/api/collections'
+      collections: '/api/collections',
+      auth: '/api/auth',
+      onepiece: '/api/onepiece'  // NEW
     }
   });
 });
@@ -49,12 +51,14 @@ const cardRoutes = require('./routes/cardRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const authRoutes = require('./routes/authRoutes');
 const collectionRoutes = require('./routes/collectionRoutes');
+const onePieceRoutes = require('./routes/onePieceRoutes');  // NEW
 
 // Use routes
 app.use('/api/cards', cardRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/collections', collectionRoutes);
+app.use('/api/onepiece', onePieceRoutes);  // NEW
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -1,4 +1,5 @@
-// src/pages/HomePage.js
+// frontend/src/pages/HomePage.js
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -10,14 +11,12 @@ import {
   Card,
   CardContent,
   Paper,
-  CardMedia,
   IconButton,
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
   Search as SearchIcon,
   Assessment as AssessmentIcon,
-  ArrowForward as ArrowForwardIcon,
   KeyboardArrowLeft,
   KeyboardArrowRight,
 } from '@mui/icons-material';
@@ -31,17 +30,29 @@ const HomePage = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [marketOverview, setMarketOverview] = useState(null);
+  const [onePieceCards, setOnePieceCards] = useState([]);
+  const [opMarketOverview, setOpMarketOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [opCurrentCardIndex, setOpCurrentCardIndex] = useState(0);
 
   const featuredCards = marketOverview?.mostExpensive?.slice(0, 8) || [];
   const currentCard = featuredCards[currentCardIndex];
+
+  const opFeaturedCards = onePieceCards.slice(0, 8) || [];
+  const opCurrentCard = opFeaturedCards[opCurrentCardIndex];
+
+  // TRUNCATE FUNCTION - JavaScript approach
+  const truncateText = (text, maxLength = 40) => {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  // Auto-rotate carousel every 8 seconds
   useEffect(() => {
     if (featuredCards.length > 1) {
       const interval = setInterval(() => {
@@ -49,19 +60,55 @@ const HomePage = () => {
           prev === featuredCards.length - 1 ? 0 : prev + 1
         );
       }, 8000);
-
       return () => clearInterval(interval);
     }
   }, [featuredCards.length]);
 
+  useEffect(() => {
+    if (opFeaturedCards.length > 1) {
+      const interval = setInterval(() => {
+        setOpCurrentCardIndex((prev) => 
+          prev === opFeaturedCards.length - 1 ? 0 : prev + 1
+        );
+      }, 8000);
+      return () => clearInterval(interval);
+    }
+  }, [opFeaturedCards.length]);
+
   const fetchData = async () => {
     try {
-      const [statsRes, marketRes] = await Promise.all([
+      const [statsRes, marketRes, onePieceRes] = await Promise.all([
         axios.get(`${API_URL}/cards/stats`),
         axios.get(`${API_URL}/analytics/market-overview`),
+        axios.get(`${API_URL}/onepiece/cards`),
       ]);
+      
       setStats(statsRes.data);
       setMarketOverview(marketRes.data);
+      
+      const sortedOnePiece = onePieceRes.data
+        .filter(card => card.market_price)
+        .sort((a, b) => b.market_price - a.market_price)
+        .slice(0, 10);
+      setOnePieceCards(sortedOnePiece);
+
+      const allOnePiece = onePieceRes.data.filter(c => c.market_price);
+      const prices = allOnePiece.map(c => c.market_price);
+      const total = prices.reduce((sum, p) => sum + p, 0);
+      const avg = total / prices.length;
+      const sortedPrices = [...prices].sort((a, b) => a - b);
+      const median = sortedPrices[Math.floor(sortedPrices.length / 2)];
+      
+      setOpMarketOverview({
+        totalCards: allOnePiece.length,
+        totalValue: total,
+        averagePrice: avg,
+        medianPrice: median,
+        maxPrice: Math.max(...prices),
+        minPrice: Math.min(...prices),
+        mostExpensive: sortedOnePiece,
+      });
+      
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -70,17 +117,33 @@ const HomePage = () => {
   };
 
   const handleNextCard = () => {
-    if (marketOverview?.mostExpensive) {
+    if (featuredCards.length > 0) {
       setCurrentCardIndex((prev) => 
-        prev === Math.min(4, marketOverview.mostExpensive.length - 1) ? 0 : prev + 1
+        prev === featuredCards.length - 1 ? 0 : prev + 1
       );
     }
   };
 
   const handlePrevCard = () => {
-    if (marketOverview?.mostExpensive) {
+    if (featuredCards.length > 0) {
       setCurrentCardIndex((prev) => 
-        prev === 0 ? Math.min(4, marketOverview.mostExpensive.length - 1) : prev - 1
+        prev === 0 ? featuredCards.length - 1 : prev - 1
+      );
+    }
+  };
+
+  const handleOpNextCard = () => {
+    if (opFeaturedCards.length > 0) {
+      setOpCurrentCardIndex((prev) => 
+        prev === opFeaturedCards.length - 1 ? 0 : prev + 1
+      );
+    }
+  };
+
+  const handleOpPrevCard = () => {
+    if (opFeaturedCards.length > 0) {
+      setOpCurrentCardIndex((prev) => 
+        prev === 0 ? opFeaturedCards.length - 1 : prev - 1
       );
     }
   };
@@ -95,7 +158,7 @@ const HomePage = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1 }}>
+    <Container maxWidth="xl" sx={{ position: 'relative', zIndex: 1 }}>
       {/* Hero Section */}
       <Box sx={{ my: 6 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
@@ -105,16 +168,28 @@ const HomePage = () => {
           </Typography>
         </Box>
         <Typography variant="h5" color="text.secondary" sx={{ mb: 4, ml: 9 }}>
-          Your Pokemon TCG Market Analytics Platform
+          Your TCG Market Analytics Platform
         </Typography>
-        <Box sx={{ ml: 9 }}>
+        <Box sx={{ ml: 9, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <Button
             variant="contained"
             size="large"
             onClick={() => navigate('/cards')}
-            sx={{ mr: 2 }}
           >
-            Browse Cards
+            Browse Pokemon Cards
+          </Button>
+          <Button
+            variant="contained"
+            size="large"
+            onClick={() => navigate('/onepiece/cards')}
+            sx={{ 
+              background: 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #c0392b 0%, #a93226 100%)',
+              }
+            }}
+          >
+            Browse One Piece Cards
           </Button>
           <Button
             variant="outlined"
@@ -126,7 +201,7 @@ const HomePage = () => {
         </Box>
       </Box>
 
-      {/* Market Ticker - Continuous Scroll */}
+      {/* Pokemon Market Ticker */}
       {marketOverview && (
         <Paper 
           elevation={3} 
@@ -139,6 +214,9 @@ const HomePage = () => {
             position: 'relative',
           }}
         >
+          <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 600, color: 'primary.main' }}>
+            🎴 Pokemon TCG Market Data
+          </Typography>
           <Box 
             sx={{ 
               display: 'flex', 
@@ -148,88 +226,30 @@ const HomePage = () => {
               whiteSpace: 'nowrap',
             }}
           >
-            {/* Duplicate the content for seamless loop */}
             {[1, 2].map((iteration) => (
               <React.Fragment key={iteration}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <TrendingUpIcon sx={{ color: 'primary.main', fontSize: 20 }} />
-                  <Typography variant="body1" fontWeight={600}>
+                  <Typography variant="body2" fontWeight={600}>
                     Market Cap: {formatPrice(marketOverview.totalValue)}
                   </Typography>
                 </Box>
-
                 <Typography variant="body2" color="text.secondary">•</Typography>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body1">
-                    Avg Price: {formatPrice(marketOverview.averagePrice)}
-                  </Typography>
-                </Box>
-
+                <Typography variant="body2">
+                  Avg: {formatPrice(marketOverview.averagePrice)}
+                </Typography>
                 <Typography variant="body2" color="text.secondary">•</Typography>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body1">
-                    Median: {formatPrice(marketOverview.medianPrice)}
-                  </Typography>
-                </Box>
-
+                <Typography variant="body2">
+                  Median: {formatPrice(marketOverview.medianPrice)}
+                </Typography>
                 <Typography variant="body2" color="text.secondary">•</Typography>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body1" sx={{ color: 'primary.main' }}>
-                    Most Expensive: {marketOverview.mostExpensive[0]?.name} - {formatPrice(marketOverview.mostExpensive[0]?.price)}
-                  </Typography>
-                </Box>
-
+                <Typography variant="body2" sx={{ color: 'primary.main' }}>
+                  Top: {marketOverview.mostExpensive[0]?.name} ({formatPrice(marketOverview.mostExpensive[0]?.price)})
+                </Typography>
                 <Typography variant="body2" color="text.secondary">•</Typography>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body1">
-                    {marketOverview.totalCards.toLocaleString()} Cards Tracked
-                  </Typography>
-                </Box>
-
-                <Typography variant="body2" color="text.secondary">•</Typography>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body1">
-                    Top Set: {marketOverview.mostExpensive[0]?.setName}
-                  </Typography>
-                </Box>
-
-                <Typography variant="body2" color="text.secondary">•</Typography>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body1">
-                    Highest Price: {formatPrice(marketOverview.maxPrice)}
-                  </Typography>
-                </Box>
-
-                <Typography variant="body2" color="text.secondary">•</Typography>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body1">
-                    Lowest Price: {formatPrice(marketOverview.minPrice)}
-                  </Typography>
-                </Box>
-
-                <Typography variant="body2" color="text.secondary">•</Typography>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body1">
-                    Cards over $100: {marketOverview.priceDistribution?.over100 || 0}
-                  </Typography>
-                </Box>
-
-                <Typography variant="body2" color="text.secondary">•</Typography>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body1">
-                    Budget Cards (&lt;$1): {marketOverview.priceDistribution?.under1 || 0}
-                  </Typography>
-                </Box>
-
+                <Typography variant="body2">
+                  {marketOverview.totalCards.toLocaleString()} Cards
+                </Typography>
                 {iteration === 1 && (
                   <Typography variant="body2" color="text.secondary" sx={{ mx: 2 }}>•</Typography>
                 )}
@@ -239,145 +259,290 @@ const HomePage = () => {
         </Paper>
       )}
 
-      {/* Add ticker animation to index.css */}
-      <style>
-        {`
-          @keyframes ticker-scroll {
-            0% {
-              transform: translateX(0);
-            }
-            100% {
-              transform: translateX(-50%);
-            }
-          }
-        `}
-      </style>
-
-      {/* Featured Card Showcase */}
-      {currentCard && (
+      {/* One Piece Market Ticker */}
+      {opMarketOverview && (
         <Paper 
           elevation={3} 
           sx={{ 
-            p: 4, 
-            mb: 4,
-            background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.8) 0%, rgba(10, 14, 26, 0.9) 100%)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(96, 165, 250, 0.1)',
+            p: 2, 
+            mb: 4, 
+            background: 'linear-gradient(135deg, rgba(231, 76, 60, 0.1) 0%, rgba(192, 57, 43, 0.1) 100%)',
+            border: '1px solid rgba(231, 76, 60, 0.2)',
+            overflow: 'hidden',
+            position: 'relative',
           }}
         >
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h4" fontWeight={600}>
-              Featured Cards
-            </Typography>
-            <Button
-              endIcon={<ArrowForwardIcon />}
-              onClick={() => navigate('/analytics')}
-            >
-              View All
-            </Button>
+          <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 600, color: 'error.main' }}>
+            🏴‍☠️ One Piece TCG Market Data
+          </Typography>
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 4,
+              animation: 'ticker-scroll 30s linear infinite',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {[1, 2].map((iteration) => (
+              <React.Fragment key={iteration}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <TrendingUpIcon sx={{ color: 'error.main', fontSize: 20 }} />
+                  <Typography variant="body2" fontWeight={600}>
+                    Market Cap: {formatPrice(opMarketOverview.totalValue)}
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary">•</Typography>
+                <Typography variant="body2">
+                  Avg: {formatPrice(opMarketOverview.averagePrice)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">•</Typography>
+                <Typography variant="body2">
+                  Median: {formatPrice(opMarketOverview.medianPrice)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">•</Typography>
+                <Typography variant="body2" sx={{ color: 'error.main' }}>
+                  Top: {opMarketOverview.mostExpensive[0]?.card_name} ({formatPrice(opMarketOverview.mostExpensive[0]?.market_price)})
+                </Typography>
+                <Typography variant="body2" color="text.secondary">•</Typography>
+                <Typography variant="body2">
+                  {opMarketOverview.totalCards.toLocaleString()} Cards
+                </Typography>
+                {iteration === 1 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mx: 2 }}>•</Typography>
+                )}
+              </React.Fragment>
+            ))}
           </Box>
+        </Paper>
+      )}
 
-          <Grid container spacing={3} alignItems="center">
-            <Grid item xs={12} md={5}>
-              <Box sx={{ position: 'relative' }}>
+      {/* SIDE-BY-SIDE Featured Cards Section */}
+      <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: { xs: 'wrap', lg: 'nowrap' } }}>
+        {/* Pokemon TCG Featured Cards */}
+        <Box sx={{ flex: 1, minWidth: { xs: '100%', lg: 0 } }}>
+          {currentCard && (
+            <Paper elevation={3} sx={{ p: 3, width: '100%', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, rgba(96, 165, 250, 0.1) 0%, rgba(129, 140, 248, 0.1) 100%)', border: '1px solid rgba(96, 165, 250, 0.2)' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" fontWeight={600}>
+                  🎴 Pokemon TCG - Most Expensive
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => navigate('/analytics')}
+                >
+                  View All
+                </Button>
+              </Box>
+              
+              <Box
+                sx={{
+                  width: '100%',
+                  height: 450,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 2,
+                  mb: 2,
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s',
+                  '&:hover': {
+                    transform: 'scale(1.02)',
+                  }
+                }}
+                onClick={() => navigate(`/cards/${currentCard.id}`)}
+              >
                 <Box
                   component="img"
                   src={currentCard.imageUrl}
                   alt={currentCard.name}
                   sx={{
-                    width: '100%',
-                    height: 'auto',
-                    borderRadius: 2,
-                    boxShadow: '0 8px 24px rgba(96, 165, 250, 0.3)',
+                    width: '95%',
+                    height: '95%',
+                    objectFit: 'contain',
                   }}
                 />
-                <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
-                  <Paper sx={{ px: 2, py: 1, bgcolor: 'rgba(0,0,0,0.7)' }}>
-                    <Typography variant="h5" color="primary.main" fontWeight={700}>
-                      {formatPrice(currentCard.price)}
-                    </Typography>
-                  </Paper>
-                </Box>
               </Box>
-            </Grid>
 
-            <Grid item xs={12} md={7}>
-              <Box sx={{ pl: { md: 4 } }}>
-                <Typography variant="h3" gutterBottom fontWeight={700}>
-                  {currentCard.name}
-                </Typography>
-                <Typography variant="h6" color="text.secondary" gutterBottom>
-                  {currentCard.setName}
-                </Typography>
-                <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-                  Ranked #{currentCardIndex + 1} in most expensive cards
-                </Typography>
-
-                <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-                  <IconButton 
-                    onClick={handlePrevCard}
-                    sx={{ 
-                      bgcolor: 'background.paper',
-                      '&:hover': { bgcolor: 'rgba(96, 165, 250, 0.1)' }
-                    }}
-                  >
-                    <KeyboardArrowLeft />
-                  </IconButton>
-                  <IconButton 
-                    onClick={handleNextCard}
-                    sx={{ 
-                      bgcolor: 'background.paper',
-                      '&:hover': { bgcolor: 'rgba(96, 165, 250, 0.1)' }
-                    }}
-                  >
-                    <KeyboardArrowRight />
-                  </IconButton>
-                </Box>
-
-                <Button
-                  variant="contained"
-                  size="large"
-                  onClick={() => navigate(`/cards/${currentCard.id}`)}
-                >
-                  View Card Details
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
-
-          {/* Thumbnail Preview */}
-          <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'center' }}>
-            {featuredCards.map((card, index) => (
-              <Box
-                key={card.id}
-                onClick={() => setCurrentCardIndex(index)}
-                sx={{
-                  width: 60,
-                  height: 84,
+              <Typography 
+                variant="h5" 
+                fontWeight={600} 
+                sx={{ 
+                  mb: 0.5,
                   cursor: 'pointer',
-                  opacity: index === currentCardIndex ? 1 : 0.5,
-                  border: index === currentCardIndex ? '2px solid' : '1px solid',
-                  borderColor: index === currentCardIndex ? 'primary.main' : 'divider',
-                  borderRadius: 1,
-                  overflow: 'hidden',
-                  transition: 'all 0.3s ease',
                   '&:hover': {
-                    opacity: 1,
-                    transform: 'scale(1.05)',
+                    color: 'primary.main',
                   }
                 }}
+                onClick={() => navigate(`/cards/${currentCard.id}`)}
+              >
+                {truncateText(currentCard.name, 35)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                {currentCard.setName}
+              </Typography>
+              <Typography variant="h4" color="primary" sx={{ mb: 2 }}>
+                {formatPrice(currentCard.price)}
+              </Typography>
+              
+              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                <IconButton onClick={handlePrevCard} size="small" sx={{ bgcolor: 'background.paper' }}>
+                  <KeyboardArrowLeft />
+                </IconButton>
+                <IconButton onClick={handleNextCard} size="small" sx={{ bgcolor: 'background.paper' }}>
+                  <KeyboardArrowRight />
+                </IconButton>
+              </Box>
+
+              <Box sx={{ display: 'flex', gap: 1.5, overflowX: 'auto', pb: 1 }}>
+                {featuredCards.map((card, index) => (
+                  <Box
+                    key={card.id}
+                    onClick={() => setCurrentCardIndex(index)}
+                    sx={{
+                      minWidth: 70,
+                      height: 100,
+                      cursor: 'pointer',
+                      opacity: index === currentCardIndex ? 1 : 0.5,
+                      border: index === currentCardIndex ? '3px solid' : '2px solid',
+                      borderColor: index === currentCardIndex ? 'primary.main' : 'divider',
+                      borderRadius: 1,
+                      overflow: 'hidden',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        opacity: 1,
+                        transform: 'scale(1.05)',
+                      }
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={card.imageUrl}
+                      alt={card.name}
+                      sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
+          )}
+        </Box>
+
+        {/* One Piece TCG Featured Cards */}
+        <Box sx={{ flex: 1, minWidth: { xs: '100%', lg: 0 } }}>
+          {opCurrentCard && (
+            <Paper elevation={3} sx={{ p: 3, width: '100%', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, rgba(231, 76, 60, 0.1) 0%, rgba(192, 57, 43, 0.1) 100%)', border: '1px solid rgba(231, 76, 60, 0.2)' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" fontWeight={600}>
+                  🏴‍☠️ One Piece TCG - Most Expensive
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => navigate('/analytics')}
+                >
+                  View All
+                </Button>
+              </Box>
+              
+              <Box
+                sx={{
+                  width: '100%',
+                  height: 450,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 2,
+                  mb: 2,
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s',
+                  '&:hover': {
+                    transform: 'scale(1.02)',
+                  }
+                }}
+                onClick={() => navigate(`/onepiece/cards/${opCurrentCard.card_image_id || opCurrentCard.card_set_id}`)}
               >
                 <Box
                   component="img"
-                  src={card.imageUrl}
-                  alt={card.name}
-                  sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  src={opCurrentCard.card_image}
+                  alt={opCurrentCard.card_name}
+                  sx={{
+                    width: '95%',
+                    height: '95%',
+                    objectFit: 'contain',
+                  }}
                 />
               </Box>
-            ))}
-          </Box>
-        </Paper>
-      )}
+
+              <Typography 
+                variant="h5" 
+                fontWeight={600} 
+                sx={{ 
+                  mb: 0.5,
+                  cursor: 'pointer',
+                  '&:hover': {
+                    color: 'error.main',
+                  }
+                }}
+                onClick={() => navigate(`/onepiece/cards/${opCurrentCard.card_image_id || opCurrentCard.card_set_id}`)}
+              >
+                {truncateText(opCurrentCard.card_name, 35)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                {opCurrentCard.set_name} • {opCurrentCard.card_set_id}
+              </Typography>
+              <Typography variant="h4" color="error" sx={{ mb: 2 }}>
+                {formatPrice(opCurrentCard.market_price)}
+              </Typography>
+              
+              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                <IconButton onClick={handleOpPrevCard} size="small" sx={{ bgcolor: 'background.paper' }}>
+                  <KeyboardArrowLeft />
+                </IconButton>
+                <IconButton onClick={handleOpNextCard} size="small" sx={{ bgcolor: 'background.paper' }}>
+                  <KeyboardArrowRight />
+                </IconButton>
+              </Box>
+
+              <Box sx={{ display: 'flex', gap: 1.5, overflowX: 'auto', pb: 1 }}>
+                {opFeaturedCards.map((card, index) => (
+                  <Box
+                    key={card.card_set_id || index}
+                    onClick={() => setOpCurrentCardIndex(index)}
+                    sx={{
+                      minWidth: 70,
+                      height: 100,
+                      cursor: 'pointer',
+                      opacity: index === opCurrentCardIndex ? 1 : 0.5,
+                      border: index === opCurrentCardIndex ? '3px solid' : '2px solid',
+                      borderColor: index === opCurrentCardIndex ? 'error.main' : 'divider',
+                      borderRadius: 1,
+                      overflow: 'hidden',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        opacity: 1,
+                        transform: 'scale(1.05)',
+                      }
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={card.card_image}
+                      alt={card.card_name}
+                      sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
+          )}
+        </Box>
+      </Box>
 
       {/* Quick Stats Dashboard */}
       {stats && (
@@ -390,7 +555,7 @@ const HomePage = () => {
               <Card>
                 <CardContent>
                   <Typography color="text.secondary" gutterBottom>
-                    Total Cards
+                    Pokemon Cards
                   </Typography>
                   <Typography variant="h3" component="div">
                     {stats.totalCards?.toLocaleString()}
@@ -402,10 +567,10 @@ const HomePage = () => {
               <Card>
                 <CardContent>
                   <Typography color="text.secondary" gutterBottom>
-                    Total Sets
+                    One Piece Cards
                   </Typography>
                   <Typography variant="h3" component="div">
-                    {stats.totalSets}
+                    3,034
                   </Typography>
                 </CardContent>
               </Card>
@@ -427,8 +592,8 @@ const HomePage = () => {
       )}
 
       {/* Feature Cards */}
-      <Grid container spacing={4} sx={{ mb: 6 }}>
-        <Grid item xs={12} md={4}>
+      <Box sx={{ display: 'flex', gap: 3, mb: 6, flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
+        <Box sx={{ flex: 1, minWidth: { xs: '100%', md: 0 } }}>
           <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
               <SearchIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
@@ -436,12 +601,12 @@ const HomePage = () => {
                 Search Cards
               </Typography>
               <Typography color="text.secondary" sx={{ flexGrow: 1 }}>
-                Browse and search thousands of Pokemon cards with filtering.
+                Browse and search thousands of TCG cards with filtering.
               </Typography>
             </CardContent>
           </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
+        </Box>
+        <Box sx={{ flex: 1, minWidth: { xs: '100%', md: 0 } }}>
           <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
               <TrendingUpIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
@@ -453,8 +618,8 @@ const HomePage = () => {
               </Typography>
             </CardContent>
           </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
+        </Box>
+        <Box sx={{ flex: 1, minWidth: { xs: '100%', md: 0 } }}>
           <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
               <AssessmentIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
@@ -466,9 +631,19 @@ const HomePage = () => {
               </Typography>
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
-      </Container>
+        </Box>
+      </Box>
+
+      {/* Ticker animation */}
+      <style>
+        {`
+          @keyframes ticker-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+          }
+        `}
+      </style>
+    </Container>
   );
 };
 

@@ -1,4 +1,5 @@
-// src/pages/CardsPage.js
+// frontend/src/pages/CardsPage.js
+
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -14,8 +15,8 @@ import {
   Pagination,
   InputAdornment,
   Chip,
-  IconButton,
   Button,
+  Skeleton,
 } from '@mui/material';
 import { Search as SearchIcon, Clear as ClearIcon } from '@mui/icons-material';
 import { fetchCards, setFilters, clearFilters } from '../store/slices/cardsSlice';
@@ -28,6 +29,7 @@ const CardsPage = () => {
   const { cards, pagination, filters, loading, error } = useSelector((state) => state.cards);
   const [searchTerm, setSearchTerm] = useState(filters.search || '');
   const [currentPage, setCurrentPage] = useState(1);
+  const [imageLoadingStates, setImageLoadingStates] = useState({});
 
   // Fetch cards whenever filters or page changes
   useEffect(() => {
@@ -36,6 +38,8 @@ const CardsPage = () => {
       limit: 20,
       search: filters.search 
     }));
+    // Reset image loading states when page changes
+    setImageLoadingStates({});
   }, [dispatch, currentPage, filters.search]);
 
   const handleSearchSubmit = (e) => {
@@ -59,10 +63,26 @@ const CardsPage = () => {
     navigate(`/cards/${cardId}`);
   };
 
+  const handleImageLoad = (cardId) => {
+    setImageLoadingStates(prev => ({ ...prev, [cardId]: 'loaded' }));
+  };
+
+  const handleImageError = (cardId) => {
+    setImageLoadingStates(prev => ({ ...prev, [cardId]: 'error' }));
+  };
+
   const formatPrice = (price) => {
     if (!price) return 'N/A';
     return `$${price.toFixed(2)}`;
   };
+
+  if (error) {
+    return (
+      <Container maxWidth="xl">
+        <ErrorMessage error={error} title="Failed to load cards" />
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="xl">
@@ -90,38 +110,32 @@ const CardsPage = () => {
                 ),
                 endAdornment: searchTerm && (
                   <InputAdornment position="end">
-                    <IconButton onClick={handleClearSearch} edge="end" size="small">
-                      <ClearIcon />
-                    </IconButton>
+                    <Button
+                      size="small"
+                      onClick={handleClearSearch}
+                      startIcon={<ClearIcon />}
+                    >
+                      Clear
+                    </Button>
                   </InputAdornment>
                 ),
               }}
             />
-            <Button type="submit" variant="contained" sx={{ minWidth: '100px' }}>
-              Search
-            </Button>
           </Box>
         </form>
-
-        {filters.search && (
-          <Box sx={{ mt: 2 }}>
-            <Chip
-              label={`Searching for: "${filters.search}"`}
-              onDelete={handleClearSearch}
-              color="primary"
-            />
-          </Box>
-        )}
       </Box>
 
-      {error && <ErrorMessage error={error} />}
-
-      {loading && <Loading message="Loading cards..." />}
+      {loading && (
+        <Loading message="Loading cards..." />
+      )}
 
       {!loading && cards.length === 0 && (
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <Typography variant="h6" color="text.secondary">
-            No cards found. Try a different search term.
+            No cards found
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Try a different search term.
           </Typography>
         </Box>
       )}
@@ -129,55 +143,109 @@ const CardsPage = () => {
       {!loading && cards.length > 0 && (
         <>
           <Grid container spacing={3}>
-            {cards.map((card) => (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={card.id}>
-                <Card
-                  sx={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s, box-shadow 0.2s',
-                    '&:hover': {
-                      transform: 'translateY(-4px)',
-                      boxShadow: 6,
-                    },
-                  }}
-                  onClick={() => handleCardClick(card.id)}
-                >
-                  <CardMedia
-                    component="img"
-                    image={card.imageUrl || 'https://via.placeholder.com/245x342?text=No+Image'}
-                    alt={card.name}
+            {cards.map((card) => {
+              const isImageLoading = !imageLoadingStates[card.id] || imageLoadingStates[card.id] === 'loading';
+              
+              return (
+                <Grid item xs={12} sm={6} md={4} lg={3} key={card.id}>
+                  <Card
                     sx={{
-                      height: 342,
-                      objectFit: 'contain',
-                      bgcolor: '#f5f5f5',
+                      height: 520,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: 6,
+                      },
                     }}
-                  />
-                  <CardContent sx={{ flexGrow: 1 }}>
-                    <Typography variant="h6" component="h2" gutterBottom noWrap>
-                      {card.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      {card.setName} • #{card.number}
-                    </Typography>
-                    {card.rarity && (
-                      <Chip
-                        label={card.rarity}
-                        size="small"
-                        sx={{ mb: 1 }}
+                    onClick={() => handleCardClick(card.id)}
+                  >
+                    <Box 
+                      sx={{ 
+                        height: 342, 
+                        width: '100%',
+                        flexShrink: 0,
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative',
+                      }}
+                    >
+                      {/* Show skeleton while image is loading */}
+                      {isImageLoading && (
+                        <Skeleton 
+                          variant="rectangular" 
+                          width="100%" 
+                          height="100%"
+                          animation="wave"
+                          sx={{ position: 'absolute', top: 0, left: 0 }}
+                        />
+                      )}
+                      <CardMedia
+                        component="img"
+                        image={card.imageUrl || 'https://via.placeholder.com/245x342?text=No+Image'}
+                        alt={card.name}
+                        loading="lazy"
+                        onLoad={() => handleImageLoad(card.id)}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = 'https://via.placeholder.com/245x342?text=No+Image';
+                          handleImageError(card.id);
+                        }}
+                        sx={{
+                          maxWidth: '100%',
+                          maxHeight: '100%',
+                          width: 'auto',
+                          height: 'auto',
+                          objectFit: 'contain',
+                          opacity: isImageLoading ? 0 : 1,
+                          transition: 'opacity 0.3s ease-in-out',
+                        }}
                       />
-                    )}
-                    {card.latestPrice && (
-                      <Typography variant="h6" color="primary" sx={{ mt: 1 }}>
-                        {formatPrice(card.latestPrice.marketPrice)}
+                    </Box>
+                    <CardContent sx={{ flexGrow: 1, overflow: 'hidden', p: 2 }}>
+                      <Typography 
+                        variant="h6" 
+                        component="h2" 
+                        gutterBottom 
+                        noWrap
+                        sx={{ fontSize: '1rem', lineHeight: 1.2, mb: 1 }}
+                      >
+                        {card.name}
                       </Typography>
-                    )}
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
+                      <Typography 
+                        variant="body2" 
+                        color="text.secondary" 
+                        gutterBottom
+                        noWrap
+                        sx={{ fontSize: '0.75rem', mb: 1 }}
+                      >
+                        {card.setName} • #{card.number}
+                      </Typography>
+                      {card.rarity && (
+                        <Chip
+                          label={card.rarity}
+                          size="small"
+                          sx={{ mb: 1, height: 20, fontSize: '0.7rem' }}
+                        />
+                      )}
+                      {card.latestPrice && (
+                        <Typography 
+                          variant="body2" 
+                          color="primary" 
+                          sx={{ mt: 1, fontWeight: 600, fontSize: '0.875rem' }}
+                        >
+                          {formatPrice(card.latestPrice.marketPrice)}
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
+            })}
           </Grid>
 
           {pagination.totalPages > 1 && (
@@ -188,6 +256,8 @@ const CardsPage = () => {
                 onChange={handlePageChange}
                 color="primary"
                 size="large"
+                showFirstButton
+                showLastButton
               />
             </Box>
           )}

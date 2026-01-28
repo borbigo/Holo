@@ -1,27 +1,24 @@
-// src/pages/AnalyticsPage.js
+// frontend/src/pages/AnalyticsPage.js
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
   Typography,
+  Box,
   Paper,
   Grid,
-  Box,
+  Tabs,
+  Tab,
   Card,
   CardMedia,
   CardContent,
-  Tabs,
-  Tab,
-  TablePagination,
+  Pagination,
+  Chip,
 } from '@mui/material';
 import {
   BarChart,
   Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -31,41 +28,60 @@ import {
 } from 'recharts';
 import axios from 'axios';
 import Loading from '../components/common/Loading';
-import ErrorMessage from '../components/common/ErrorMessage';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658'];
-
 const AnalyticsPage = () => {
   const navigate = useNavigate();
+  
   const [marketOverview, setMarketOverview] = useState(null);
-  const [setAnalytics, setSetAnalytics] = useState([]);
+  const [setAnalytics, setSetAnalytics] = useState(null);
+  const [onePieceCards, setOnePieceCards] = useState([]);
+  const [opMarketOverview, setOpMarketOverview] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [tcgTab, setTcgTab] = useState(0);
   const [activeTab, setActiveTab] = useState(0);
   const [expensiveCardsPage, setExpensiveCardsPage] = useState(0);
-  
-  const cardsPerPage = 10;
+  const cardsPerPage = 20;
 
   useEffect(() => {
-    fetchAnalyticsData();
+    fetchData();
   }, []);
 
-  const fetchAnalyticsData = async () => {
+  const fetchData = async () => {
     try {
-      setLoading(true);
-      const [overviewRes, setsRes] = await Promise.all([
+      const [marketRes, setRes, onePieceRes] = await Promise.all([
         axios.get(`${API_URL}/analytics/market-overview`),
-        axios.get(`${API_URL}/analytics/sets?limit=10`),
+        axios.get(`${API_URL}/analytics/sets`),
+        axios.get(`${API_URL}/onepiece/cards`),
       ]);
 
-      setMarketOverview(overviewRes.data);
-      setSetAnalytics(setsRes.data.sets);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching analytics:', err);
-      setError(err.message);
+      setMarketOverview(marketRes.data);
+      setSetAnalytics(setRes.data);
+      
+      const sortedOnePiece = onePieceRes.data
+        .filter(card => card.market_price)
+        .sort((a, b) => b.market_price - a.market_price);
+      setOnePieceCards(sortedOnePiece);
+      
+      const prices = sortedOnePiece.map(c => c.market_price);
+      const total = prices.reduce((sum, p) => sum + p, 0);
+      const avg = total / prices.length;
+      const sortedPrices = [...prices].sort((a, b) => a - b);
+      const median = sortedPrices[Math.floor(sortedPrices.length / 2)];
+      
+      setOpMarketOverview({
+        totalCards: sortedOnePiece.length,
+        totalValue: total,
+        averagePrice: avg,
+        medianPrice: median,
+        maxPrice: Math.max(...prices),
+        minPrice: Math.min(...prices),
+        mostExpensive: sortedOnePiece.slice(0, 50),
+      });
+      
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
     } finally {
       setLoading(false);
     }
@@ -73,48 +89,75 @@ const AnalyticsPage = () => {
 
   const formatPrice = (price) => {
     if (!price) return '$0.00';
+    if (price >= 1000000) return `$${(price / 1000000).toFixed(2)}M`;
+    if (price >= 1000) return `$${(price / 1000).toFixed(2)}K`;
     return `$${price.toFixed(2)}`;
   };
 
   const formatLargeNumber = (num) => {
     if (!num) return '0';
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
     return num.toLocaleString();
+  };
+
+  const getPriceDistData = (overview) => {
+    if (!overview?.priceDistribution) return [];
+    
+    const dist = overview.priceDistribution;
+    return [
+      { range: 'Under $1', count: dist.under1 || 0 },
+      { range: '$1-5', count: dist['1to5'] || 0 },
+      { range: '$5-10', count: dist['5to10'] || 0 },
+      { range: '$10-25', count: dist['10to25'] || 0 },
+      { range: '$25-50', count: dist['25to50'] || 0 },
+      { range: '$50-100', count: dist['50to100'] || 0 },
+      { range: '$100+', count: dist.over100 || 0 },
+    ];
+  };
+
+  const getOpPriceDistData = () => {
+    const ranges = { under1: 0, '1to5': 0, '5to10': 0, '10to25': 0, '25to50': 0, '50to100': 0, over100: 0 };
+    onePieceCards.forEach(card => {
+      const price = card.market_price;
+      if (price < 1) ranges.under1++;
+      else if (price < 5) ranges['1to5']++;
+      else if (price < 10) ranges['5to10']++;
+      else if (price < 25) ranges['10to25']++;
+      else if (price < 50) ranges['25to50']++;
+      else if (price < 100) ranges['50to100']++;
+      else ranges.over100++;
+    });
+
+    return [
+      { range: 'Under $1', count: ranges.under1 },
+      { range: '$1-5', count: ranges['1to5'] },
+      { range: '$5-10', count: ranges['5to10'] },
+      { range: '$10-25', count: ranges['10to25'] },
+      { range: '$25-50', count: ranges['25to50'] },
+      { range: '$50-100', count: ranges['50to100'] },
+      { range: '$100+', count: ranges.over100 },
+    ];
+  };
+
+  const getSetComparisonData = () => {
+    if (!setAnalytics?.sets) return [];
+    
+    return setAnalytics.sets.slice(0, 10).map(set => ({
+      name: set.name.length > 20 ? set.name.substring(0, 20) + '...' : set.name,
+      avgPrice: parseFloat(set.averagePrice.toFixed(2)),
+      totalValue: parseFloat(set.totalValue.toFixed(2)),
+      cards: set.totalCards,
+    }));
   };
 
   if (loading) {
     return <Loading message="Loading analytics..." />;
   }
 
-  if (error) {
-    return (
-      <Container maxWidth="lg">
-        <ErrorMessage error={error} title="Failed to load analytics" />
-      </Container>
-    );
-  }
-
-  // Prepare price distribution data for pie chart
-  const priceDistData = marketOverview?.priceDistribution
-    ? [
-        { name: 'Under $1', value: marketOverview.priceDistribution.under1 || 0 },
-        { name: '$1-$5', value: marketOverview.priceDistribution['1to5'] || 0 },
-        { name: '$5-$10', value: marketOverview.priceDistribution['5to10'] || 0 },
-        { name: '$10-$25', value: marketOverview.priceDistribution['10to25'] || 0 },
-        { name: '$25-$50', value: marketOverview.priceDistribution['25to50'] || 0 },
-        { name: '$50-$100', value: marketOverview.priceDistribution['50to100'] || 0 },
-        { name: 'Over $100', value: marketOverview.priceDistribution.over100 || 0 },
-      ].filter(item => item.value > 0) // Remove empty categories
-    : [];
-
-  console.log('Price Distribution Data:', priceDistData); // Debug log
-
-  // Prepare set comparison data
-  const setComparisonData = setAnalytics.map((set) => ({
-    name: set.name.length > 20 ? set.name.substring(0, 20) + '...' : set.name,
-    avgPrice: parseFloat(set.averagePrice.toFixed(2)),
-    totalValue: parseFloat(set.totalValue.toFixed(2)),
-    cards: set.totalCards,
-  }));
+  const currentOverview = tcgTab === 0 ? marketOverview : opMarketOverview;
+  const priceDistData = tcgTab === 0 ? getPriceDistData(marketOverview) : getOpPriceDistData();
+  const setCompData = tcgTab === 0 ? getSetComparisonData() : [];
 
   return (
     <Container maxWidth="xl">
@@ -122,15 +165,21 @@ const AnalyticsPage = () => {
         Market Analytics
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-        Comprehensive insights and statistics from the Pokemon TCG market
+        Comprehensive insights and statistics from TCG markets
       </Typography>
 
-      {/* Market Overview Stats */}
+      <Paper elevation={3} sx={{ mb: 4 }}>
+        <Tabs value={tcgTab} onChange={(e, v) => { setTcgTab(v); setActiveTab(0); setExpensiveCardsPage(0); }}>
+          <Tab label="Pokemon TCG" />
+          <Tab label="One Piece TCG" />
+        </Tabs>
+      </Paper>
+
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
           <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
             <Typography variant="h4" color="primary">
-              {formatLargeNumber(marketOverview?.totalCards)}
+              {formatLargeNumber(currentOverview?.totalCards)}
             </Typography>
             <Typography variant="body1" color="text.secondary">
               Cards Tracked
@@ -140,7 +189,7 @@ const AnalyticsPage = () => {
         <Grid item xs={12} sm={6} md={3}>
           <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
             <Typography variant="h4" color="primary">
-              {formatPrice(marketOverview?.totalValue)}
+              {formatPrice(currentOverview?.totalValue)}
             </Typography>
             <Typography variant="body1" color="text.secondary">
               Total Market Value
@@ -150,7 +199,7 @@ const AnalyticsPage = () => {
         <Grid item xs={12} sm={6} md={3}>
           <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
             <Typography variant="h4" color="primary">
-              {formatPrice(marketOverview?.averagePrice)}
+              {formatPrice(currentOverview?.averagePrice)}
             </Typography>
             <Typography variant="body1" color="text.secondary">
               Average Price
@@ -160,7 +209,7 @@ const AnalyticsPage = () => {
         <Grid item xs={12} sm={6} md={3}>
           <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
             <Typography variant="h4" color="primary">
-              {formatPrice(marketOverview?.medianPrice)}
+              {formatPrice(currentOverview?.medianPrice)}
             </Typography>
             <Typography variant="body1" color="text.secondary">
               Median Price
@@ -169,57 +218,36 @@ const AnalyticsPage = () => {
         </Grid>
       </Grid>
 
-      {/* Tabs for different views */}
       <Paper elevation={3} sx={{ mb: 4 }}>
         <Tabs value={activeTab} onChange={(e, v) => setActiveTab(v)}>
           <Tab label="Price Distribution" />
           <Tab label="Most Expensive Cards" />
-          <Tab label="Set Comparison" />
+          {tcgTab === 0 && <Tab label="Set Comparison" />}
         </Tabs>
 
         <Box sx={{ p: 3 }}>
-          {/* Tab 0: Price Distribution */}
           {activeTab === 0 && (
             <Box>
               <Typography variant="h5" gutterBottom fontWeight={600}>
                 Price Distribution
               </Typography>
               {priceDistData.length === 0 ? (
-                <Typography variant="body1" color="text.secondary" sx={{ py: 4 }}>
-                  No price distribution data available
-                </Typography>
+                <Typography>No price distribution data available</Typography>
               ) : (
                 <>
-                  <Grid container spacing={3} sx={{ mb: 3 }}>
-                    {priceDistData.map((item, index) => (
-                      <Grid item xs={12} sm={6} md={3} key={index}>
-                        <Paper sx={{ p: 3, textAlign: 'center' }}>
-                          <Typography variant="h4" color="primary">
-                            {formatLargeNumber(item.value)}
-                          </Typography>
-                          <Typography variant="body1" color="text.secondary">
-                            {item.name}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {((item.value / marketOverview.totalCards) * 100).toFixed(1)}% of cards
-                          </Typography>
-                        </Paper>
-                      </Grid>
-                    ))}
-                  </Grid>
-                  
-                  <Paper sx={{ p: 3 }}>
-                    <Typography variant="h6" gutterBottom>
-                      Key Insights
-                    </Typography>
-                    <Typography variant="body1" paragraph>
-                      • <strong>{((priceDistData[0]?.value / marketOverview.totalCards) * 100).toFixed(1)}%</strong> of cards are valued under $1
-                    </Typography>
-                    <Typography variant="body1" paragraph>
-                      • Only <strong>{formatLargeNumber(marketOverview.priceDistribution.over100)}</strong> cards ({((marketOverview.priceDistribution.over100 / marketOverview.totalCards) * 100).toFixed(1)}%) are worth over $100
-                    </Typography>
-                    <Typography variant="body1">
-                      • The median price of <strong>${marketOverview.medianPrice}</strong> shows most cards are affordable for collectors
+                  <ResponsiveContainer width="100%" height={400}>
+                    <BarChart data={priceDistData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="range" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="count" fill={tcgTab === 0 ? "#60A5FA" : "#e74c3c"} name="Number of Cards" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <Paper elevation={0} sx={{ mt: 3, p: 2, bgcolor: 'background.default' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      💡 <strong>Insight:</strong> The distribution shows most cards are affordable for collectors
                     </Typography>
                   </Paper>
                 </>
@@ -227,25 +255,34 @@ const AnalyticsPage = () => {
             </Box>
           )}
 
-          {/* Tab 1: Most Expensive Cards */}
           {activeTab === 1 && (
             <Box>
               <Typography variant="h5" gutterBottom fontWeight={600}>
                 Most Expensive Cards
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Showing top 50 most valuable cards in the database
+                Showing top 50 most valuable cards
               </Typography>
               
               <Grid container spacing={3}>
-                {marketOverview?.mostExpensive
+                {currentOverview?.mostExpensive
                   ?.slice(expensiveCardsPage * cardsPerPage, (expensiveCardsPage + 1) * cardsPerPage)
                   .map((card, index) => {
                     const rank = expensiveCardsPage * cardsPerPage + index + 1;
+                    const isPokemon = tcgTab === 0;
+                    const cardId = isPokemon ? card.id : (card.card_set_id || card.card_image_id);
+                    const cardImage = isPokemon ? card.imageUrl : card.card_image;
+                    const cardName = isPokemon ? card.name : card.card_name;
+                    const cardSet = isPokemon ? card.setName : card.set_name;
+                    const cardPrice = isPokemon ? card.price : card.market_price;
+                    
                     return (
-                      <Grid item xs={12} sm={6} md={4} lg={2.4} key={card.id}>
+                      <Grid item xs={12} sm={6} md={4} lg={2.4} key={cardId || index}>
                         <Card
                           sx={{
+                            height: 480, // FIXED: Uniform height
+                            display: 'flex',
+                            flexDirection: 'column',
                             cursor: 'pointer',
                             '&:hover': {
                               transform: 'translateY(-4px)',
@@ -253,9 +290,9 @@ const AnalyticsPage = () => {
                             },
                             transition: 'all 0.3s ease',
                           }}
-                          onClick={() => navigate(`/cards/${card.id}`)}
+                          onClick={() => isPokemon && navigate(`/cards/${cardId}`)}
                         >
-                          <Box sx={{ position: 'relative' }}>
+                          <Box sx={{ position: 'relative', height: 320, flexShrink: 0 }}>
                             <Box
                               sx={{
                                 position: 'absolute',
@@ -269,28 +306,50 @@ const AnalyticsPage = () => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontWeight: 'bold',
+                                fontWeight: 600,
+                                fontSize: '0.875rem',
                                 zIndex: 1,
                               }}
                             >
-                              {rank}
+                              #{rank}
                             </Box>
                             <CardMedia
                               component="img"
-                              image={card.imageUrl}
-                              alt={card.name}
-                              sx={{ height: 342, objectFit: 'contain', bgcolor: '#f5f5f5' }}
+                              image={cardImage || 'https://via.placeholder.com/245x342'}
+                              alt={cardName}
+                              sx={{ 
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'contain', 
+                                bgcolor: '#f5f5f5',
+                                p: 1,
+                              }}
                             />
                           </Box>
-                          <CardContent>
-                            <Typography variant="h6" noWrap>
-                              {card.name}
+                          <CardContent sx={{ flexGrow: 1, overflow: 'hidden', p: 2 }}>
+                            <Typography 
+                              variant="h6" 
+                              noWrap 
+                              gutterBottom
+                              sx={{ fontSize: '0.9rem', lineHeight: 1.2 }}
+                            >
+                              {cardName}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" gutterBottom>
-                              {card.setName}
+                            <Typography 
+                              variant="body2" 
+                              color="text.secondary" 
+                              noWrap 
+                              gutterBottom
+                              sx={{ fontSize: '0.75rem' }}
+                            >
+                              {cardSet}
                             </Typography>
-                            <Typography variant="h5" color="primary" sx={{ mt: 1 }}>
-                              {formatPrice(card.price)}
+                            <Typography 
+                              variant="h6" 
+                              color="primary" 
+                              sx={{ mt: 1, fontSize: '1rem', fontWeight: 600 }}
+                            >
+                              {formatPrice(cardPrice)}
                             </Typography>
                           </CardContent>
                         </Card>
@@ -299,104 +358,39 @@ const AnalyticsPage = () => {
                   })}
               </Grid>
 
-              {/* Pagination */}
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-                <TablePagination
-                  component="div"
-                  count={marketOverview?.mostExpensive?.length || 0}
-                  page={expensiveCardsPage}
-                  onPageChange={(e, newPage) => setExpensiveCardsPage(newPage)}
-                  rowsPerPage={cardsPerPage}
-                  rowsPerPageOptions={[10]}
-                  labelDisplayedRows={({ from, to, count }) => 
-                    `Showing ${from}-${to} of top ${count} cards`
-                  }
-                />
-              </Box>
+              {currentOverview?.mostExpensive && currentOverview.mostExpensive.length > cardsPerPage && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                  <Pagination
+                    count={Math.ceil(currentOverview.mostExpensive.length / cardsPerPage)}
+                    page={expensiveCardsPage + 1}
+                    onChange={(e, page) => setExpensiveCardsPage(page - 1)}
+                    color="primary"
+                    size="large"
+                  />
+                </Box>
+              )}
             </Box>
           )}
 
-          {/* Tab 2: Set Comparison */}
-          {activeTab === 2 && (
+          {activeTab === 2 && tcgTab === 0 && (
             <Box>
               <Typography variant="h5" gutterBottom fontWeight={600}>
-                Set Value Comparison
+                Set Comparison
               </Typography>
-              <ResponsiveContainer width="100%" height={500}>
-                <BarChart data={setComparisonData} margin={{ bottom: 100 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" angle={-45} textAnchor="end" height={120} />
-                  <YAxis yAxisId="left" orientation="left" stroke="#1976d2" />
-                  <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
-                  <Tooltip formatter={(value) => formatPrice(value)} />
-                  <Legend />
-                  <Bar
-                    yAxisId="left"
-                    dataKey="avgPrice"
-                    fill="#1976d2"
-                    name="Average Card Price"
-                  />
-                  <Bar
-                    yAxisId="right"
-                    dataKey="totalValue"
-                    fill="#82ca9d"
-                    name="Total Set Value"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-
-              <Box sx={{ mt: 4 }}>
-                <Typography variant="h6" gutterBottom>
-                  Set Details
-                </Typography>
-                <Grid container spacing={2}>
-                  {setAnalytics.map((set) => (
-                    <Grid item xs={12} md={6} key={set.id}>
-                      <Paper sx={{ p: 2 }}>
-                        <Typography variant="subtitle1" fontWeight={600}>
-                          {set.name}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {set.series} • Released:{' '}
-                          {new Date(set.releaseDate).toLocaleDateString()}
-                        </Typography>
-                        <Grid container spacing={2} sx={{ mt: 1 }}>
-                          <Grid item xs={6}>
-                            <Typography variant="caption" color="text.secondary">
-                              Cards
-                            </Typography>
-                            <Typography variant="body1">{set.totalCards}</Typography>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <Typography variant="caption" color="text.secondary">
-                              Avg Price
-                            </Typography>
-                            <Typography variant="body1">
-                              {formatPrice(set.averagePrice)}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <Typography variant="caption" color="text.secondary">
-                              Total Value
-                            </Typography>
-                            <Typography variant="body1">
-                              {formatPrice(set.totalValue)}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <Typography variant="caption" color="text.secondary">
-                              Most Expensive
-                            </Typography>
-                            <Typography variant="body1">
-                              {formatPrice(set.maxPrice)}
-                            </Typography>
-                          </Grid>
-                        </Grid>
-                      </Paper>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Box>
+              {setCompData.length === 0 ? (
+                <Typography>No set data available</Typography>
+              ) : (
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart data={setCompData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="avgPrice" fill="#60A5FA" name="Avg Price ($)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </Box>
           )}
         </Box>
